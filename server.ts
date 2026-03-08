@@ -36,7 +36,47 @@ async function startServer() {
     }
   });
 
-  // API Routes
+  // Proxy Routes to avoid CORS issues with external Vercel URL
+  app.get("/api/proxy/videos", async (req, res) => {
+    try {
+      const targetUrl = `https://videos-gamma-seven-80.vercel.app/api/videos?${new URLSearchParams(req.query as any).toString()}`;
+      const response = await fetch(targetUrl);
+      if (!response.ok) throw new Error(`External API returned ${response.status}`);
+      const data = await response.json();
+      res.json(data);
+    } catch (error: any) {
+      console.error("Proxy Error (Videos):", error.message);
+      res.status(502).json({ error: "Error al conectar con el servidor externo", details: error.message });
+    }
+  });
+
+  app.post("/api/proxy/upload", upload.single("video"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No se subió ningún archivo" });
+
+      const formData = new FormData();
+      const blob = new Blob([fs.readFileSync(req.file.path)], { type: req.file.mimetype });
+      formData.append("video", blob, req.file.originalname);
+
+      const response = await fetch("https://videos-gamma-seven-80.vercel.app/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error(`External API returned ${response.status}`);
+      const data = await response.json();
+      
+      // Clean up local temp file
+      fs.unlinkSync(req.file.path);
+      
+      res.json(data);
+    } catch (error: any) {
+      console.error("Proxy Error (Upload):", error.message);
+      res.status(502).json({ error: "Error al subir al servidor externo", details: error.message });
+    }
+  });
+
+  // API Routes (Local fallback)
   app.get("/api/videos", (req, res) => {
     try {
       const page = parseInt(req.query.page as string) || 1;

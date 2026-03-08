@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 // --- Constants ---
-const API_BASE = 'https://videos-gamma-seven-80.vercel.app';
+const API_BASE = window.location.origin; // Use local proxy
+const EXTERNAL_BASE = 'https://videos-gamma-seven-80.vercel.app';
 
 // --- Components ---
 
@@ -44,18 +45,33 @@ const VideoPlayer = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [fetchingMore, setFetchingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchVideos = async (pageNum: number, isInitial = false) => {
-    if (isInitial) setLoading(true);
-    else setFetchingMore(true);
+    if (isInitial) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setFetchingMore(true);
+    }
 
     try {
-      const res = await fetch(`${API_BASE}/api/videos?page=${pageNum}&limit=5`);
+      // Try proxy first to avoid CORS
+      const res = await fetch(`${API_BASE}/api/proxy/videos?page=${pageNum}&limit=5`);
+      
+      if (!res.ok) {
+        throw new Error(`Error del servidor: ${res.status}`);
+      }
+
       const data = await res.json();
       
-      // Ensure video URLs are absolute
-      const newVideos = data.videos.map((v: string) => v.startsWith('http') ? v : `${API_BASE}${v}`);
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Ensure video URLs are absolute pointing to the external server
+      const newVideos = data.videos.map((v: string) => v.startsWith('http') ? v : `${EXTERNAL_BASE}${v}`);
       
       if (isInitial) {
         setVideos(newVideos);
@@ -65,8 +81,9 @@ const VideoPlayer = () => {
       }
       
       setHasMore(data.hasMore);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching videos:", err);
+      setError(err.message || "No se pudieron cargar los videos");
     } finally {
       setLoading(false);
       setFetchingMore(false);
@@ -97,6 +114,22 @@ const VideoPlayer = () => {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="animate-spin text-zinc-500" size={48} />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen p-8 text-center">
+        <AlertCircle size={64} className="text-red-500 mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Error de Conexión</h2>
+        <p className="text-zinc-500 mb-6">{error}</p>
+        <button 
+          onClick={() => fetchVideos(1, true)}
+          className="px-6 py-3 bg-white text-black rounded-full font-bold hover:bg-zinc-200 transition-all"
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
@@ -181,7 +214,8 @@ const UploadPage = () => {
     formData.append('video', file);
 
     try {
-      const res = await fetch(`${API_BASE}/api/upload`, {
+      // Use proxy to avoid CORS
+      const res = await fetch(`${API_BASE}/api/proxy/upload`, {
         method: 'POST',
         body: formData,
       });
