@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
+// --- Constants ---
+const API_BASE = 'https://videos-gamma-seven-80.vercel.app';
+
 // --- Components ---
 
 const Navbar = () => {
@@ -48,14 +51,17 @@ const VideoPlayer = () => {
     else setFetchingMore(true);
 
     try {
-      const res = await fetch(`/api/videos?page=${pageNum}&limit=5`);
+      const res = await fetch(`${API_BASE}/api/videos?page=${pageNum}&limit=5`);
       const data = await res.json();
       
+      // Ensure video URLs are absolute
+      const newVideos = data.videos.map((v: string) => v.startsWith('http') ? v : `${API_BASE}${v}`);
+      
       if (isInitial) {
-        setVideos(data.videos);
+        setVideos(newVideos);
         setCurrentIndex(0);
       } else {
-        setVideos(prev => [...prev, ...data.videos]);
+        setVideos(prev => [...prev, ...newVideos]);
       }
       
       setHasMore(data.hasMore);
@@ -74,7 +80,6 @@ const VideoPlayer = () => {
   const nextVideo = () => {
     const nextIdx = currentIndex + 1;
     
-    // If we are near the end of the current list and there's more on the server, fetch it
     if (nextIdx >= videos.length - 2 && hasMore && !fetchingMore) {
       const nextPage = page + 1;
       setPage(nextPage);
@@ -83,8 +88,7 @@ const VideoPlayer = () => {
 
     if (nextIdx < videos.length) {
       setCurrentIndex(nextIdx);
-    } else if (!hasMore) {
-      // Loop back to start if no more videos
+    } else if (!hasMore && videos.length > 0) {
       setCurrentIndex(0);
     }
   };
@@ -177,7 +181,7 @@ const UploadPage = () => {
     formData.append('video', file);
 
     try {
-      const res = await fetch('/api/upload', {
+      const res = await fetch(`${API_BASE}/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -189,7 +193,7 @@ const UploadPage = () => {
         setStatus({ type: 'error', message: data.error || 'Error al subir el video' });
       }
     } catch (err) {
-      setStatus({ type: 'error', message: 'Error de conexión con el servidor' });
+      setStatus({ type: 'error', message: 'Error de conexión con el servidor externo' });
     } finally {
       setUploading(false);
     }
