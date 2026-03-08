@@ -10,7 +10,7 @@ const Navbar = () => {
   
   const links = [
     { path: '/', label: 'Inicio', icon: Home },
-    { path: '/subir', label: 'Subir', icon: Upload },
+    { path: '/cargar', label: 'Subir', icon: Upload },
     { path: '/contacto', label: 'Contacto', icon: Mail },
   ];
 
@@ -102,7 +102,7 @@ const VideoPlayer = () => {
           <Video size={64} className="mx-auto mb-4 text-zinc-700" />
           <h2 className="text-2xl font-bold mb-2">No hay videos aún</h2>
           <p className="text-zinc-500 mb-6">Sé el primero en subir algo increíble.</p>
-          <Link to="/subir" className="px-6 py-3 bg-white text-black rounded-full font-bold hover:bg-zinc-200 transition-all">
+          <Link to="/cargar" className="px-6 py-3 bg-white text-black rounded-full font-bold hover:bg-zinc-200 transition-all">
             Subir Video
           </Link>
         </div>
@@ -131,7 +131,7 @@ const UploadPage = () => {
     formData.append('video', file);
 
     try {
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/cargar', {
         method: 'POST',
         body: formData,
       });
@@ -266,7 +266,7 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<VideoPlayer />} />
-            <Route path="/subir" element={<UploadPage />} />
+            <Route path="/cargar" element={<UploadPage />} />
             <Route path="/contacto" element={<ContactPage />} />
           </Routes>
         </main>
