@@ -39,11 +39,31 @@ async function startServer() {
   // API Routes
   app.get("/api/videos", (req, res) => {
     try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const startIndex = (page - 1) * limit;
+
       const files = fs.readdirSync(videosDir);
       const videoFiles = files.filter(file => 
         [".mp4", ".webm", ".ogg", ".mov"].includes(path.extname(file).toLowerCase())
       );
-      res.json(videoFiles.map(file => `/videos/${file}`));
+
+      // Sort by creation time (newest first) for consistent pagination
+      const sortedVideos = videoFiles
+        .map(file => ({
+          name: file,
+          time: fs.statSync(path.join(videosDir, file)).mtime.getTime()
+        }))
+        .sort((a, b) => b.time - a.time)
+        .map(v => `/videos/${v.name}`);
+
+      const paginatedVideos = sortedVideos.slice(startIndex, startIndex + limit);
+
+      res.json({
+        videos: paginatedVideos,
+        total: sortedVideos.length,
+        hasMore: startIndex + limit < sortedVideos.length
+      });
     } catch (error) {
       res.status(500).json({ error: "Error al leer la carpeta de videos" });
     }

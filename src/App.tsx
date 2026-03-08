@@ -36,37 +36,57 @@ const Navbar = () => {
 
 const VideoPlayer = () => {
   const [videos, setVideos] = useState<string[]>([]);
-  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [fetchingMore, setFetchingMore] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const fetchVideos = async () => {
+  const fetchVideos = async (pageNum: number, isInitial = false) => {
+    if (isInitial) setLoading(true);
+    else setFetchingMore(true);
+
     try {
-      const res = await fetch('/api/videos');
+      const res = await fetch(`/api/videos?page=${pageNum}&limit=5`);
       const data = await res.json();
-      setVideos(data);
-      if (data.length > 0) {
-        const random = data[Math.floor(Math.random() * data.length)];
-        setCurrentVideo(random);
+      
+      if (isInitial) {
+        setVideos(data.videos);
+        setCurrentIndex(0);
+      } else {
+        setVideos(prev => [...prev, ...data.videos]);
       }
+      
+      setHasMore(data.hasMore);
     } catch (err) {
       console.error("Error fetching videos:", err);
     } finally {
       setLoading(false);
+      setFetchingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchVideos();
+    fetchVideos(1, true);
   }, []);
 
   const nextVideo = () => {
-    if (videos.length <= 1) return;
-    let next;
-    do {
-      next = videos[Math.floor(Math.random() * videos.length)];
-    } while (next === currentVideo);
-    setCurrentVideo(next);
+    const nextIdx = currentIndex + 1;
+    
+    // If we are near the end of the current list and there's more on the server, fetch it
+    if (nextIdx >= videos.length - 2 && hasMore && !fetchingMore) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchVideos(nextPage);
+    }
+
+    if (nextIdx < videos.length) {
+      setCurrentIndex(nextIdx);
+    } else if (!hasMore) {
+      // Loop back to start if no more videos
+      setCurrentIndex(0);
+    }
   };
 
   if (loading) {
@@ -77,25 +97,51 @@ const VideoPlayer = () => {
     );
   }
 
+  const currentVideo = videos[currentIndex];
+
   return (
     <div className="relative h-screen w-full bg-black overflow-hidden flex items-center justify-center">
       {currentVideo ? (
         <>
-          <video
-            ref={videoRef}
-            src={currentVideo}
-            autoPlay
-            controls
-            className="h-full w-full object-contain"
-            onEnded={nextVideo}
-          />
-          <button
-            onClick={nextVideo}
-            className="absolute right-6 bottom-24 md:bottom-12 p-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all z-10"
-            title="Siguiente Video"
-          >
-            <SkipForward size={24} />
-          </button>
+          <AnimatePresence mode="wait">
+            <motion.video
+              key={currentVideo}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.05 }}
+              transition={{ duration: 0.3 }}
+              ref={videoRef}
+              src={currentVideo}
+              autoPlay
+              controls
+              className="h-full w-full object-contain"
+              onEnded={nextVideo}
+            />
+          </AnimatePresence>
+          
+          <div className="absolute right-6 bottom-24 md:bottom-12 flex flex-col gap-4 z-10">
+            <button
+              onClick={nextVideo}
+              className="p-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all shadow-xl"
+              title="Siguiente Video"
+            >
+              <SkipForward size={24} />
+            </button>
+            
+            {fetchingMore && (
+              <div className="bg-black/50 backdrop-blur-sm p-2 rounded-full">
+                <Loader2 className="animate-spin text-white" size={20} />
+              </div>
+            )}
+          </div>
+
+          <div className="absolute top-6 left-6 z-10">
+            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+              <span className="text-xs font-bold text-white/70 uppercase tracking-widest">
+                Video {currentIndex + 1} de {videos.length} {hasMore ? '+' : ''}
+              </span>
+            </div>
+          </div>
         </>
       ) : (
         <div className="text-center p-8">
