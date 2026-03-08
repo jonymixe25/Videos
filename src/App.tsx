@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
 
 // --- Constants ---
 const API_BASE = window.location.origin; // Use local proxy
@@ -198,6 +198,7 @@ const VideoPlayer = () => {
 };
 
 const UploadPage = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
@@ -213,6 +214,7 @@ const UploadPage = () => {
     if (!file) return;
 
     setUploading(true);
+    setStatus(null);
     const formData = new FormData();
     formData.append('video', file);
 
@@ -224,13 +226,17 @@ const UploadPage = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setStatus({ type: 'success', message: '¡Video publicado con éxito!' });
+        setStatus({ type: 'success', message: '¡Video publicado con éxito! Redirigiendo...' });
         setFile(null);
+        // Redirect after a short delay to show success message
+        setTimeout(() => {
+          navigate('/');
+        }, 1500);
       } else {
         setStatus({ type: 'error', message: data.error || 'Error al subir el video' });
       }
     } catch (err) {
-      setStatus({ type: 'error', message: 'Error de conexión con el servidor externo' });
+      setStatus({ type: 'error', message: 'Error al subir el video: No se pudo conectar con el servidor' });
     } finally {
       setUploading(false);
     }
@@ -290,12 +296,22 @@ const UploadPage = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className={`flex items-center gap-3 p-4 rounded-xl ${
-                  status.type === 'success' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                className={`flex items-center justify-between gap-3 p-4 rounded-xl border ${
+                  status.type === 'success' 
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
+                    : 'bg-red-500/10 text-red-500 border-red-500/20'
                 }`}
               >
-                {status.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-                <span className="text-sm font-medium">{status.message}</span>
+                <div className="flex items-center gap-3">
+                  {status.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                  <span className="text-sm font-semibold">{status.message}</span>
+                </div>
+                <button 
+                  onClick={() => setStatus(null)}
+                  className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={16} />
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

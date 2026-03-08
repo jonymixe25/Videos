@@ -63,12 +63,13 @@ async function startServer() {
     };
   };
 
-  // Proxy Routes with Fallback
+  // Proxy Routes with Silent Fallback
   app.get("/api/proxy/videos", async (req, res) => {
     try {
       const targetUrl = `https://videos-gamma-seven-80.vercel.app/api/videos?${new URLSearchParams(req.query as any).toString()}`;
       const response = await fetch(targetUrl);
       
+      // Only attempt to parse if the response is OK and is JSON
       if (response.ok) {
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.includes("application/json")) {
@@ -77,10 +78,10 @@ async function startServer() {
         }
       }
       
-      console.warn(`External API failed (${response.status}), falling back to local.`);
+      // If external fails (404, 500, etc.), silently return local videos
       res.json(getLocalVideos(req));
     } catch (error: any) {
-      console.error("Proxy Error (Videos), falling back to local:", error.message);
+      // Silent fallback on connection errors
       res.json(getLocalVideos(req));
     }
   });
@@ -89,7 +90,7 @@ async function startServer() {
     try {
       if (!req.file) return res.status(400).json({ error: "No se subió ningún archivo" });
 
-      // Try external upload
+      // Try external upload silently
       try {
         const formData = new FormData();
         const fileBuffer = fs.readFileSync(req.file.path);
@@ -102,24 +103,25 @@ async function startServer() {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          // Clean up local temp file if external upload succeeded
-          fs.unlinkSync(req.file.path);
-          return res.json({ ...data, source: "external" });
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await response.json();
+            fs.unlinkSync(req.file.path);
+            return res.json({ ...data, source: "external" });
+          }
         }
-        console.warn(`External upload failed (${response.status}), keeping local copy.`);
       } catch (extError) {
-        console.warn("External upload failed, keeping local copy.");
+        // Ignore external upload errors and proceed with local
       }
       
-      // If external fails, the file is already in videosDir thanks to multer
+      // Fallback to local storage (file is already saved by multer)
       res.json({ 
         message: "Video subido con éxito (Local)", 
         url: `/videos/${req.file.filename}`,
         source: "local"
       });
     } catch (error: any) {
-      res.status(500).json({ error: "Error crítico en la subida", details: error.message });
+      res.status(500).json({ error: "Error en la subida", details: error.message });
     }
   });
 
