@@ -45,6 +45,7 @@ const VideoPlayer = () => {
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [fetchingMore, setFetchingMore] = useState(false);
+  const [source, setSource] = useState<'local' | 'external'>('local');
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -57,7 +58,6 @@ const VideoPlayer = () => {
     }
 
     try {
-      // Try proxy first to avoid CORS
       const res = await fetch(`${API_BASE}/api/proxy/videos?page=${pageNum}&limit=5`);
       
       if (!res.ok) {
@@ -65,13 +65,13 @@ const VideoPlayer = () => {
       }
 
       const data = await res.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      setSource(data.source);
 
-      // Ensure video URLs are absolute pointing to the external server
-      const newVideos = data.videos.map((v: string) => v.startsWith('http') ? v : `${EXTERNAL_BASE}${v}`);
+      // Ensure video URLs are absolute pointing to the correct server
+      const newVideos = data.videos.map((v: string) => {
+        if (v.startsWith('http')) return v;
+        return data.source === 'external' ? `${EXTERNAL_BASE}${v}` : `${API_BASE}${v}`;
+      });
       
       if (isInitial) {
         setVideos(newVideos);
@@ -172,11 +172,14 @@ const VideoPlayer = () => {
             )}
           </div>
 
-          <div className="absolute top-6 left-6 z-10">
+          <div className="absolute top-6 left-6 z-10 flex flex-col gap-2">
             <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
               <span className="text-xs font-bold text-white/70 uppercase tracking-widest">
                 Video {currentIndex + 1} de {videos.length} {hasMore ? '+' : ''}
               </span>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter w-fit ${source === 'external' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+              Servidor: {source === 'external' ? 'Vercel' : 'Local'}
             </div>
           </div>
         </>
