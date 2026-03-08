@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2, X } from 'lucide-react';
-
-// --- Constants ---
-const API_BASE = window.location.origin; // Use local proxy
-const EXTERNAL_BASE = 'https://videos-gamma-seven-80.vercel.app';
+import { Upload, Home, Mail, Play, SkipForward, Video, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 // --- Components ---
 
@@ -40,74 +36,37 @@ const Navbar = () => {
 
 const VideoPlayer = () => {
   const [videos, setVideos] = useState<string[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [fetchingMore, setFetchingMore] = useState(false);
-  const [source, setSource] = useState<'local' | 'external'>('local');
-  const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  const fetchVideos = async (pageNum: number, isInitial = false) => {
-    if (isInitial) {
-      setLoading(true);
-      setError(null);
-    } else {
-      setFetchingMore(true);
-    }
-
+  const fetchVideos = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/proxy/videos?page=${pageNum}&limit=5`);
-      
-      if (!res.ok) {
-        throw new Error(`Error del servidor: ${res.status}`);
-      }
-
+      const res = await fetch('/api/videos');
       const data = await res.json();
-      setSource(data.source);
-
-      // Ensure video URLs are absolute pointing to the correct server
-      const newVideos = data.videos.map((v: string) => {
-        if (v.startsWith('http')) return v;
-        return data.source === 'external' ? `${EXTERNAL_BASE}${v}` : `${API_BASE}${v}`;
-      });
-      
-      if (isInitial) {
-        setVideos(newVideos);
-        setCurrentIndex(0);
-      } else {
-        setVideos(prev => [...prev, ...newVideos]);
+      setVideos(data);
+      if (data.length > 0) {
+        const random = data[Math.floor(Math.random() * data.length)];
+        setCurrentVideo(random);
       }
-      
-      setHasMore(data.hasMore);
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error fetching videos:", err);
-      setError(err.message || "No se pudieron cargar los videos");
     } finally {
       setLoading(false);
-      setFetchingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchVideos(1, true);
+    fetchVideos();
   }, []);
 
   const nextVideo = () => {
-    const nextIdx = currentIndex + 1;
-    
-    if (nextIdx >= videos.length - 2 && hasMore && !fetchingMore) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      fetchVideos(nextPage);
-    }
-
-    if (nextIdx < videos.length) {
-      setCurrentIndex(nextIdx);
-    } else if (!hasMore && videos.length > 0) {
-      setCurrentIndex(0);
-    }
+    if (videos.length <= 1) return;
+    let next;
+    do {
+      next = videos[Math.floor(Math.random() * videos.length)];
+    } while (next === currentVideo);
+    setCurrentVideo(next);
   };
 
   if (loading) {
@@ -118,70 +77,25 @@ const VideoPlayer = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen p-8 text-center">
-        <AlertCircle size={64} className="text-red-500 mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Error de Conexión</h2>
-        <p className="text-zinc-500 mb-6">{error}</p>
-        <button 
-          onClick={() => fetchVideos(1, true)}
-          className="px-6 py-3 bg-white text-black rounded-full font-bold hover:bg-zinc-200 transition-all"
-        >
-          Reintentar
-        </button>
-      </div>
-    );
-  }
-
-  const currentVideo = videos[currentIndex];
-
   return (
     <div className="relative h-screen w-full bg-black overflow-hidden flex items-center justify-center">
       {currentVideo ? (
         <>
-          <AnimatePresence mode="wait">
-            <motion.video
-              key={currentVideo}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.05 }}
-              transition={{ duration: 0.3 }}
-              ref={videoRef}
-              src={currentVideo}
-              autoPlay
-              controls
-              className="h-full w-full object-contain"
-              onEnded={nextVideo}
-            />
-          </AnimatePresence>
-          
-          <div className="absolute right-6 bottom-24 md:bottom-12 flex flex-col gap-4 z-10">
-            <button
-              onClick={nextVideo}
-              className="p-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all shadow-xl"
-              title="Siguiente Video"
-            >
-              <SkipForward size={24} />
-            </button>
-            
-            {fetchingMore && (
-              <div className="bg-black/50 backdrop-blur-sm p-2 rounded-full">
-                <Loader2 className="animate-spin text-white" size={20} />
-              </div>
-            )}
-          </div>
-
-          <div className="absolute top-6 left-6 z-10 flex flex-col gap-2">
-            <div className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-              <span className="text-xs font-bold text-white/70 uppercase tracking-widest">
-                Video {currentIndex + 1} de {videos.length} {hasMore ? '+' : ''}
-              </span>
-            </div>
-            <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter w-fit ${source === 'external' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-              Servidor: {source === 'external' ? 'Vercel' : 'Local'}
-            </div>
-          </div>
+          <video
+            ref={videoRef}
+            src={currentVideo}
+            autoPlay
+            controls
+            className="h-full w-full object-contain"
+            onEnded={nextVideo}
+          />
+          <button
+            onClick={nextVideo}
+            className="absolute right-6 bottom-24 md:bottom-12 p-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white hover:bg-white/20 transition-all z-10"
+            title="Siguiente Video"
+          >
+            <SkipForward size={24} />
+          </button>
         </>
       ) : (
         <div className="text-center p-8">
@@ -198,7 +112,6 @@ const VideoPlayer = () => {
 };
 
 const UploadPage = () => {
-  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [status, setStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
@@ -214,29 +127,23 @@ const UploadPage = () => {
     if (!file) return;
 
     setUploading(true);
-    setStatus(null);
     const formData = new FormData();
     formData.append('video', file);
 
     try {
-      // Use proxy to avoid CORS
-      const res = await fetch(`${API_BASE}/api/proxy/upload`, {
+      const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       });
       const data = await res.json();
       if (res.ok) {
-        setStatus({ type: 'success', message: '¡Video publicado con éxito! Redirigiendo...' });
+        setStatus({ type: 'success', message: '¡Video publicado con éxito!' });
         setFile(null);
-        // Redirect after a short delay to show success message
-        setTimeout(() => {
-          navigate('/');
-        }, 1500);
       } else {
         setStatus({ type: 'error', message: data.error || 'Error al subir el video' });
       }
     } catch (err) {
-      setStatus({ type: 'error', message: 'Error al subir el video: No se pudo conectar con el servidor' });
+      setStatus({ type: 'error', message: 'Error de conexión con el servidor' });
     } finally {
       setUploading(false);
     }
@@ -296,22 +203,12 @@ const UploadPage = () => {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
-                className={`flex items-center justify-between gap-3 p-4 rounded-xl border ${
-                  status.type === 'success' 
-                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' 
-                    : 'bg-red-500/10 text-red-500 border-red-500/20'
+                className={`flex items-center gap-3 p-4 rounded-xl ${
+                  status.type === 'success' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  {status.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
-                  <span className="text-sm font-semibold">{status.message}</span>
-                </div>
-                <button 
-                  onClick={() => setStatus(null)}
-                  className="p-1 hover:bg-white/10 rounded-full transition-colors"
-                >
-                  <X size={16} />
-                </button>
+                {status.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                <span className="text-sm font-medium">{status.message}</span>
               </motion.div>
             )}
           </AnimatePresence>
