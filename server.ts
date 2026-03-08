@@ -1,0 +1,81 @@
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import path from "path";
+import fs from "fs";
+import multer from "multer";
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // Ensure videos directory exists
+  const videosDir = path.join(process.cwd(), "public", "videos");
+  if (!fs.existsSync(videosDir)) {
+    fs.mkdirSync(videosDir, { recursive: true });
+  }
+
+  // Configure multer for video uploads
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, videosDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    },
+  });
+
+  const upload = multer({ 
+    storage,
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith("video/")) {
+        cb(null, true);
+      } else {
+        cb(new Error("Solo se permiten archivos de video."));
+      }
+    }
+  });
+
+  // API Routes
+  app.get("/api/videos", (req, res) => {
+    try {
+      const files = fs.readdirSync(videosDir);
+      const videoFiles = files.filter(file => 
+        [".mp4", ".webm", ".ogg", ".mov"].includes(path.extname(file).toLowerCase())
+      );
+      res.json(videoFiles.map(file => `/videos/${file}`));
+    } catch (error) {
+      res.status(500).json({ error: "Error al leer la carpeta de videos" });
+    }
+  });
+
+  app.post("/api/upload", upload.single("video"), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "No se subió ningún archivo" });
+    }
+    res.json({ message: "Video subido con éxito", url: `/videos/${req.file.filename}` });
+  });
+
+  // Serve static videos
+  app.use("/videos", express.static(videosDir));
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.join(process.cwd(), "dist")));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  });
+}
+
+startServer();
